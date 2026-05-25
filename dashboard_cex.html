@@ -50,7 +50,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'IBM Pl
 .sc-v{font-family:'Bebas Neue',sans-serif;font-size:34px;letter-spacing:1px;line-height:1}
 .sc-l{font-size:10px;color:var(--muted2);margin-top:2px;letter-spacing:.03em}
 
-.main{display:grid;grid-template-columns:1fr 220px;gap:8px;overflow:hidden}
+.main{display:grid;grid-template-columns:1fr 220px;gap:8px;overflow:hidden;height:100%}
 .panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
 .ph{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .pt{font-size:11px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.1em}
@@ -85,8 +85,8 @@ td{padding:6px 8px;vertical-align:middle;font-size:12px}
 .overdue-row:hover td{background:rgba(239,68,68,0.12)!important}
 .overdue-row .on{color:#fca5a5}
 
-.rcol{display:flex;flex-direction:column;gap:8px;overflow:hidden}
-.side{background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.rcol{display:flex;flex-direction:column;gap:8px;overflow:hidden;height:100%}
+.side{background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
 .sb{padding:10px 12px}
 .lr{display:flex;align-items:center;gap:7px;margin-bottom:8px}
 .lr:last-child{margin-bottom:0}
@@ -155,7 +155,7 @@ td{padding:6px 8px;vertical-align:middle;font-size:12px}
     <div class="rcol">
       <div class="side">
         <div class="ph"><div class="pt">Загрузка по стадиям</div></div>
-        <div class="sb" id="lbody"></div>
+        <div class="sb" id="lbody" style="overflow-y:auto;flex:1"></div>
       </div>
       <div class="side" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
         <div class="ph"><div class="pt">Последние добавленные</div></div>
