@@ -38,7 +38,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'IBM Pl
 .cfg-btn{background:var(--bg3);border:1px solid var(--border2);color:var(--muted2);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-family:'IBM Plex Sans',sans-serif;transition:all .15s}
 .cfg-btn:hover{border-color:var(--blue);color:var(--blue)}
 
-.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .sc{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:12px}
 .sc-ico{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
 .sc-v{font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:1px;line-height:1}
@@ -133,7 +133,7 @@ td{padding:8px 10px;vertical-align:middle}
     <div class="sc"><div class="sc-ico" style="background:var(--purple-bg);color:var(--purple)">✏️</div><div><div class="sc-v" id="s2" style="color:var(--purple)">—</div><div class="sc-l">Конструкторское бюро</div></div></div>
     <div class="sc"><div class="sc-ico" style="background:var(--amber-bg);color:var(--amber)">⚙️</div><div><div class="sc-v" id="s3" style="color:var(--amber)">—</div><div class="sc-l">Производство</div></div></div>
     <div class="sc"><div class="sc-ico" style="background:var(--green-bg);color:var(--green)">🏭</div><div><div class="sc-v" id="s4" style="color:var(--green)">—</div><div class="sc-l">На складе</div></div></div>
-    <div class="sc" style="border-color:rgba(34,197,94,0.3);background:rgba(34,197,94,0.06)"><div class="sc-ico" style="background:rgba(34,197,94,0.2);color:#22c55e">🚚</div><div><div class="sc-v" id="s5" style="color:#22c55e">—</div><div class="sc-l" style="color:#22c55e">Отгружено</div></div></div>
+
   </div>
 
   <div class="main">
@@ -435,7 +435,6 @@ function render() {
   document.getElementById('s2').textContent = kb.length   || '0';
   document.getElementById('s3').textContent = prod.length || '0';
   document.getElementById('s4').textContent = sklad.length|| '0';
-  document.getElementById('s5').textContent = otgr.length || '0';
   document.getElementById('ocnt').textContent = showList.length + ' заказов';
 
   // Sort: production first (by pct desc), then KB
