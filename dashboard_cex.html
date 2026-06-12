@@ -593,7 +593,7 @@ function render() {
           '</span>'
         : '<span style="color:var(--muted)">—</span>';
       return '<tr' + (isOverdue ? ' class="overdue-row"' : '') + '>' +
-        '<td><div class="on" style="cursor:pointer;text-decoration:underline dotted" onclick="openHistory(' + o.id + ','' + esc(o.name) + '')">' + esc(o.name) + '</div>' + (o.client ? '<div class="oc">' + esc(o.client) + '</div>' : '') + '</td>' +
+        '<td><div class="on" style="cursor:pointer;text-decoration:underline dotted" onclick="openHistory(' + o.id + ',this.textContent)">' + esc(o.name) + '</div>' + (o.client ? '<div class="oc">' + esc(o.client) + '</div>' : '') + '</td>' +
         '<td><div class="thumb-wrap">' +
           '<div class="no-thumb" id="ph-' + o.id + '">📷</div>' +
           '<img class="thumb" data-task-id="' + o.id + '" src="" style="display:none" onclick="openImg(this.src)" alt="фото"/>' +
@@ -606,7 +606,7 @@ function render() {
           var days = daysInCurrentStage(o);
           var col = days === null ? 'var(--muted)' : days > 7 ? 'var(--red)' : days > 3 ? 'var(--amber)' : 'var(--green)';
           var txt = days === null ? '—' : days + ' дн.';
-          return '<td class="mono" style="color:'+col+';white-space:nowrap;cursor:pointer" onclick="openHistory('+o.id+',''+esc(o.name)+'')" title="Нажмите для истории стадий">' + txt + ' 📋</td>';
+          return '<td class="mono" style="color:'+col+';white-space:nowrap;cursor:pointer" onclick="openHistory('+o.id+',this.textContent)" title="Нажмите для истории стадий">' + txt + ' 📋</td>';
         })() +
         '<td class="mono" style="color:var(--muted2);white-space:nowrap">' + fmtDate(o.created, false) + '</td>' +
         '<td class="mono" style="white-space:nowrap">' + dlHtml + '</td>' +
