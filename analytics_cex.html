@@ -230,9 +230,11 @@ async function loadAnalytics(){
     var t = tasks[i];
     var tid = t.id || t.ID;
     var title = t.title || t.TITLE || '';
-    var mC = title.match(/Имя клиента:\s*(.*?)(?:\s+Имя детали:|$)/i);
+    var mC = title.match(/Имя клиента:\s*(.*?)(?:\s*Имя детали:|\s*Дог№|$)/i);
     var mD = title.match(/Дог№\s*(\S+)/i);
     var client = mC ? mC[1].trim() : '';
+    // Если в клиента попало 'Имя детали' — чистим
+    client = client.replace(/Имя детали.*$/i,'').trim();
     var dogNum = mD ? mD[1].trim() : tid;
 
     done++;
@@ -253,10 +255,21 @@ async function loadAnalytics(){
     });
 
     var taskStages = [];
+    // Финальные стадии где заказ считается готовым — не учитываем время простоя на складе
+    var doneStageNames = ['Готовая форма','Клиент не забрал','Клиент забрал'];
     for (var j = 0; j < timeline.length; j++) {
       var cur = timeline[j];
       var next = timeline[j+1];
       var stageName = STAGE_BY_NAME[cur.stage] || cur.stage;
+
+      // Если это финальная стадия и нет следующей — заказ завершён, время не идёт
+      var isDone = doneStageNames.indexOf(stageName) >= 0;
+      if (isDone && !next) {
+        // Не добавляем растущее время — заказ готов, просто отмечаем стадию с 0 дней
+        taskStages.push({ stage: stageName, days: 0, done: true });
+        continue;
+      }
+
       var fromD = new Date(cur.date);
       var toD = next ? new Date(next.date) : new Date();
       var days = Math.max(0, (toD - fromD) / 86400000);
@@ -267,7 +280,6 @@ async function loadAnalytics(){
 
       taskStages.push({ stage: stageName, days: days });
 
-      // Переходы
       if (next) {
         var toName = STAGE_BY_NAME[next.stage] || next.stage;
         var key = stageName + '→' + toName;
@@ -283,7 +295,10 @@ async function loadAnalytics(){
     });
 
     var totalDays = taskStages.reduce(function(a,s){ return a + s.days; }, 0);
-    taskDurations.push({ name:'Дог №'+dogNum, client:client, totalDays:totalDays, stages:taskStages });
+    // Заказ завершён только если последняя стадия — финальная
+    var lastStage = taskStages.length ? taskStages[taskStages.length-1].stage : '';
+    var isCompleted = ['Готовая форма','Клиент не забрал','Клиент забрал'].indexOf(lastStage) >= 0;
+    taskDurations.push({ name:'Дог №'+dogNum, client:client, totalDays:totalDays, stages:taskStages, completed:isCompleted });
 
     // Закрытые по месяцам (последняя стадия = Клиент забрал)
     if (timeline.length) {
@@ -314,16 +329,17 @@ function renderAnalytics(data){
   });
   // Узкое место — максимальное среднее время
   var bottleneck = avgByStage.slice().sort(function(a,b){ return b.avg-a.avg; })[0] || {name:'—',avg:0};
-  var avgTotal = taskDurations.length ? taskDurations.reduce(function(a,t){return a+t.totalDays;},0)/taskDurations.length : 0;
-  var slowest = taskDurations.slice().sort(function(a,b){ return b.totalDays-a.totalDays; })[0] || {name:'—',totalDays:0};
+  var completedTasks = taskDurations.filter(function(t){return t.completed;});
+  var avgTotal = completedTasks.length ? completedTasks.reduce(function(a,t){return a+t.totalDays;},0)/completedTasks.length : 0;
+  var slowest = completedTasks.slice().sort(function(a,b){ return b.totalDays-a.totalDays; })[0] || {name:'—',totalDays:0};
 
   var html = '';
 
   // KPI ROW
   html += '<div class="kpis">' +
-    '<div class="kpi"><div class="kpi-v" style="color:var(--blue)">'+data.totalTasks+'</div><div class="kpi-l">Всего задач проанализировано</div></div>' +
+    '<div class="kpi"><div class="kpi-v" style="color:var(--blue)">'+data.totalTasks+'</div><div class="kpi-l">Всего задач</div><div class="kpi-sub">завершено: '+completedTasks.length+'</div></div>' +
     '<div class="kpi"><div class="kpi-v" style="color:var(--red)">'+esc(bottleneck.name)+'</div><div class="kpi-l">Главное узкое место</div><div class="kpi-sub">в среднем '+bottleneck.avg.toFixed(1)+' дн.</div></div>' +
-    '<div class="kpi"><div class="kpi-v" style="color:var(--amber)">'+avgTotal.toFixed(1)+'</div><div class="kpi-l">Средний цикл заказа (дней)</div></div>' +
+    '<div class="kpi"><div class="kpi-v" style="color:var(--amber)">'+avgTotal.toFixed(1)+'</div><div class="kpi-l">Средний цикл (завершённые)</div><div class="kpi-sub">по '+completedTasks.length+' заказам</div></div>' +
     '<div class="kpi"><div class="kpi-v" style="color:var(--purple)" title="'+esc(slowest.name)+'">'+slowest.totalDays.toFixed(0)+'</div><div class="kpi-l">Самый долгий заказ (дней)</div><div class="kpi-sub">'+esc(slowest.name)+'</div></div>' +
   '</div>';
 
@@ -335,8 +351,8 @@ function renderAnalytics(data){
 
   // RATINGS ROW
   html += '<div class="grid">' +
-    '<div class="card"><div class="card-title">🐌 Самые медленные заказы (топ-10)</div><div id="slowTable"></div></div>' +
-    '<div class="card"><div class="card-title">⚡ Самые быстрые заказы (топ-10)</div><div id="fastTable"></div></div>' +
+    '<div class="card"><div class="card-title">🐌 Самые медленные завершённые заказы (топ-10)</div><div id="slowTable"></div></div>' +
+    '<div class="card"><div class="card-title">⚡ Самые быстрые завершённые заказы (топ-10)</div><div id="fastTable"></div></div>' +
   '</div>';
 
   // HEATMAP + closed
@@ -380,7 +396,7 @@ function renderAnalytics(data){
   });
 
   // Slow/fast tables
-  var sorted = taskDurations.slice().filter(function(t){return t.totalDays>0;}).sort(function(a,b){return b.totalDays-a.totalDays;});
+  var sorted = taskDurations.slice().filter(function(t){return t.totalDays>0 && t.completed;}).sort(function(a,b){return b.totalDays-a.totalDays;});
   var slow = sorted.slice(0,10);
   var fast = sorted.slice().reverse().slice(0,10);
   var maxSlow = slow.length?slow[0].totalDays:1;
