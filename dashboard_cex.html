@@ -49,7 +49,7 @@ html,body{height:100%;width:100%;background:var(--bg);color:var(--text);font-fam
 .panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;min-height:0;height:100%}
 .ph{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .pt{font-size:11px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.1em}
-.psc{overflow-y:auto;flex:1;min-height:0}
+.psc{overflow-y:scroll;flex:1;min-height:0;-webkit-overflow-scrolling:touch}
 
 table{width:100%;border-collapse:collapse}
 thead th{padding:5px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg2);z-index:1}
@@ -72,6 +72,18 @@ td{padding:5px 7px;vertical-align:middle;font-size:11px}
 .img-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:300;align-items:center;justify-content:center;cursor:pointer}
 .img-modal.open{display:flex}
 .img-modal img{max-width:90vw;max-height:90vh;border-radius:10px;object-fit:contain}
+.hist-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:300;align-items:center;justify-content:center}
+.hist-modal.open{display:flex}
+.hist-box{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:24px;width:560px;max-height:80vh;overflow-y:auto}
+.hist-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;margin-bottom:16px;color:var(--text)}
+.hist-close{float:right;cursor:pointer;color:var(--muted);font-size:18px;margin-top:-2px}
+.hist-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.hist-item:last-child{border-bottom:none}
+.hist-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.hist-body{}
+.hist-stage{font-size:13px;font-weight:500;color:var(--text)}
+.hist-meta{font-size:11px;color:var(--muted2);margin-top:3px;font-family:'IBM Plex Mono',monospace}
+.hist-days{font-size:12px;font-weight:500;padding:2px 8px;border-radius:10px;margin-left:8px}
 .nodata{text-align:center;padding:36px;color:var(--muted);font-size:13px;line-height:2}
 .overdue-header{position:sticky;top:0;z-index:10;background:rgba(239,68,68,0.13);border-bottom:1px solid rgba(239,68,68,0.3);padding:5px 10px;display:flex;align-items:center;gap:8px;flex-shrink:0}
 .overdue-label{font-size:10px;font-weight:600;color:var(--red);text-transform:uppercase;letter-spacing:.1em}
@@ -162,6 +174,12 @@ td{padding:5px 7px;vertical-align:middle;font-size:11px}
 </div>
 
 <div class="img-modal" id="imgModal" onclick="document.getElementById('imgModal').classList.remove('open')"><img id="imgBig" src="" alt=""/></div>
+<div class="hist-modal" id="histModal">
+  <div class="hist-box">
+    <div class="hist-title" id="histTitle">История стадий <span class="hist-close" onclick="document.getElementById('histModal').classList.remove('open')">✕</span></div>
+    <div id="histBody"><div style="text-align:center;padding:20px;color:var(--muted)">Загрузка...</div></div>
+  </div>
+</div>
 
 <div class="overlay" id="ov">
   <div class="cfgbox">
@@ -224,6 +242,7 @@ var DEMO = [
 ];
 
 var cfg = {url:'', tok:''};
+var bxBase = '';
 var orders = [];
 var timer = null;
 var scrollDir = 1;
@@ -289,7 +308,7 @@ function fmtDate(ds, short) {
 var photoCache = {};
 
 async function fetchTaskPhoto(base, taskId) {
-  if (photoCache[taskId] !== undefined) return photoCache[taskId];
+  if (photoCache[taskId] !== undefined) return photoCache[taskId]; // use cache always
   try {
     // Шаг 1: получаем ID вложений из задачи
     var r1 = await fetch(base + 'tasks.task.get.json?taskId=' + taskId + '&select[]=UF_TASK_WEBDAV_FILES');
@@ -324,7 +343,7 @@ async function fetchGroup(base, gid) {
     try {
       var url = base + 'tasks.task.list.json?filter[GROUP_ID]=' + gid +
         '&select[]=ID&select[]=TITLE&select[]=STAGE_ID&select[]=DEADLINE' +
-        '&select[]=RESPONSIBLE_ID&select[]=GROUP_ID&select[]=CREATED_DATE' +
+        '&select[]=RESPONSIBLE_ID&select[]=GROUP_ID&select[]=CREATED_DATE&select[]=STATUS_CHANGED_DATE' +
         '&order[CREATED_DATE]=desc&limit=50&start=' + start;
       var r = await fetch(url);
       var d = await r.json();
@@ -347,6 +366,7 @@ async function fetchGroup(base, gid) {
 async function fetchAll() {
   try {
     var base = cfg.url + '/rest/1/' + cfg.tok + '/';
+    bxBase = base;
     var results = await Promise.all([
       fetchGroup(base, '2'),
       fetchGroup(base, '4'),
@@ -387,6 +407,8 @@ async function fetchAll() {
       };
     });
 
+    // Обновляем историю стадий
+    trackStageHistory(orders);
     render();
     document.getElementById('upd').textContent = 'Обновлено: ' +
       new Date().toLocaleTimeString('ru', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
@@ -398,12 +420,73 @@ async function fetchAll() {
   }
 }
 
+// ===== STAGE HISTORY =====
+var historyCache = {};
+
+async function fetchTaskHistory(taskId) {
+  if (historyCache[taskId]) return historyCache[taskId];
+  try {
+    var r = await fetch(bxBase + 'tasks.task.history.list.json?taskId=' + taskId);
+    var d = await r.json();
+    var list = (d.result && d.result.list) || [];
+    // Фильтруем только смены стадий
+    var stages = list.filter(function(h){ return h.field === 'STAGE'; });
+    // Добавляем создание задачи как первую точку
+    var created = list.find(function(h){ return h.field === 'NEW'; });
+    var result = [];
+    if (created) {
+      result.push({
+        from: null,
+        to: list[0] && list[0].field === 'STAGE' ? list[0].value.from : null,
+        date: created.createdDate,
+        user: created.user ? (created.user.name + ' ' + created.user.lastName) : '—'
+      });
+    }
+    stages.forEach(function(h) {
+      result.push({
+        from: h.value.from,
+        to: h.value.to,
+        date: h.createdDate,
+        user: h.user ? (h.user.name + ' ' + h.user.lastName) : '—'
+      });
+    });
+    historyCache[taskId] = result;
+    return result;
+  } catch(e) { return []; }
+}
+
+function daysBetween(from, to) {
+  if (!from) return 0;
+  var d1 = new Date(from); d1.setHours(0,0,0,0);
+  var d2 = to ? new Date(to) : new Date(); d2.setHours(0,0,0,0);
+  return Math.max(0, Math.round((d2 - d1) / 86400000));
+}
+
+function daysInCurrentStage(o) {
+  var from = o.stageChanged || o.created;
+  if (!from) return null;
+  return daysBetween(from, null);
+}
+
+function trackStageHistory(orders) {} // не используется, оставлено для совместимости
+
 // ===== LAZY PHOTO LOADER =====
 async function loadPhotos(base) {
+  if (!base) base = bxBase;
+  if (!base) return;
   var imgs = document.querySelectorAll('img[data-task-id]');
   for (var i = 0; i < imgs.length; i++) {
     var el = imgs[i];
     var tid = el.getAttribute('data-task-id');
+    if (photoCache[tid] !== undefined) {
+      // already cached - just apply
+      if (photoCache[tid] && !el.src.includes('http')) {
+        el.src = photoCache[tid]; el.style.display='block';
+        var ph = el.parentNode && el.parentNode.querySelector('.no-thumb');
+        if (ph) ph.style.display='none';
+      }
+      continue;
+    }
     if (!tid) continue;
     var url = await fetchTaskPhoto(base, tid);
     if (url) {
@@ -422,6 +505,44 @@ async function loadPhotos(base) {
 function openImg(src) {
   document.getElementById('imgBig').src = src;
   document.getElementById('imgModal').classList.add('open');
+}
+
+async function openHistory(taskId, taskName) {
+  document.getElementById('histTitle').innerHTML = 'История · ' + taskName + ' <span class="hist-close" onclick="document.getElementById('histModal').classList.remove('open')">✕</span>';
+  document.getElementById('histBody').innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">Загрузка...</div>';
+  document.getElementById('histModal').classList.add('open');
+
+  var hist = await fetchTaskHistory(taskId);
+
+  if (!hist.length) {
+    document.getElementById('histBody').innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">История недоступна</div>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < hist.length; i++) {
+    var h = hist[i];
+    var nextDate = (i + 1 < hist.length) ? hist[i+1].date : null;
+    var days = daysBetween(h.date, nextDate);
+    var stageName = h.to || h.from || 'Создана';
+    // Find stage color
+    var stColor = '#60a5fa';
+    Object.values(STAGE_MAP).forEach(function(s){ if(s.label === stageName) stColor = s.color; });
+    var daysColor = days > 7 ? 'var(--red)' : days > 3 ? 'var(--amber)' : 'var(--green)';
+    var daysLabel = nextDate ? days + ' дн.' : days + ' дн. (сейчас)';
+    var dateStr = h.date ? new Date(h.date).toLocaleDateString('ru',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+
+    html += '<div class="hist-item">' +
+      '<div class="hist-dot" style="background:' + stColor + '"></div>' +
+      '<div class="hist-body" style="flex:1">' +
+        '<div class="hist-stage">' + esc(stageName) +
+          '<span class="hist-days" style="background:' + daysColor + '22;color:' + daysColor + '">' + daysLabel + '</span>' +
+        '</div>' +
+        '<div class="hist-meta">' + dateStr + ' · ' + esc(h.user||'—') + '</div>' +
+      '</div>' +
+    '</div>';
+  }
+  document.getElementById('histBody').innerHTML = html;
 }
 
 // ===== RENDER =====
@@ -472,7 +593,7 @@ function render() {
           '</span>'
         : '<span style="color:var(--muted)">—</span>';
       return '<tr' + (isOverdue ? ' class="overdue-row"' : '') + '>' +
-        '<td><div class="on">' + esc(o.name) + '</div>' + (o.client ? '<div class="oc">' + esc(o.client) + '</div>' : '') + '</td>' +
+        '<td><div class="on" style="cursor:pointer;text-decoration:underline dotted" onclick="openHistory(' + o.id + ','' + esc(o.name) + '')">' + esc(o.name) + '</div>' + (o.client ? '<div class="oc">' + esc(o.client) + '</div>' : '') + '</td>' +
         '<td><div class="thumb-wrap">' +
           '<div class="no-thumb" id="ph-' + o.id + '">📷</div>' +
           '<img class="thumb" data-task-id="' + o.id + '" src="" style="display:none" onclick="openImg(this.src)" alt="фото"/>' +
@@ -481,6 +602,12 @@ function render() {
         '<td><span class="pill" style="background:' + s.bg + ';color:' + s.color + ';border-color:' + s.color + '33">' + s.label + '</span></td>' +
         '<td><div class="pg"><div class="pgf" style="width:' + s.pct + '%;background:' + s.color + '"></div></div></td>' +
         '<td><span class="rp" style="max-width:90px;overflow:hidden;text-overflow:ellipsis;display:inline-block;white-space:nowrap">' + esc(o.resp) + '</span></td>' +
+        (function(){
+          var days = daysInCurrentStage(o);
+          var col = days === null ? 'var(--muted)' : days > 7 ? 'var(--red)' : days > 3 ? 'var(--amber)' : 'var(--green)';
+          var txt = days === null ? '—' : days + ' дн.';
+          return '<td class="mono" style="color:'+col+';white-space:nowrap;cursor:pointer" onclick="openHistory('+o.id+',''+esc(o.name)+'')" title="Нажмите для истории стадий">' + txt + ' 📋</td>';
+        })() +
         '<td class="mono" style="color:var(--muted2);white-space:nowrap">' + fmtDate(o.created, false) + '</td>' +
         '<td class="mono" style="white-space:nowrap">' + dlHtml + '</td>' +
         '</tr>';
@@ -488,7 +615,7 @@ function render() {
 
     var thead = '<thead><tr>' +
       '<th>Заказ / Клиент</th><th>Деталь</th><th>Стадия</th>' +
-      '<th>Прог.</th><th>Ответств.</th><th>Запуск</th><th>Дедлайн</th>' +
+      '<th>Прог.</th><th>Ответств.</th><th>В стадии</th><th>Запуск</th><th>Дедлайн</th>' +
       '</tr></thead>';
 
     var html = '';
@@ -555,6 +682,8 @@ function render() {
 }
 
 // ===== AUTOSCROLL =====
+var manualScrollTimer = null;
+
 function startScroll() {
   if (scrollInterval) clearInterval(scrollInterval);
   scrollDir = 1;
@@ -577,8 +706,23 @@ function startScroll() {
   }, 40);
 }
 
-document.getElementById('scrollWrap').addEventListener('mouseenter', function() { scrollPaused = true; });
-document.getElementById('scrollWrap').addEventListener('mouseleave', function() { scrollPaused = false; });
+// Пауза при ручной прокрутке — возобновляется через 10 секунд
+var el = document.getElementById('scrollWrap');
+el.addEventListener('mouseenter', function() { scrollPaused = true; });
+el.addEventListener('mouseleave', function() { scrollPaused = false; });
+el.addEventListener('scroll', function() {
+  scrollPaused = true;
+  if (manualScrollTimer) clearTimeout(manualScrollTimer);
+  manualScrollTimer = setTimeout(function() { scrollPaused = false; }, 10000);
+});
+el.addEventListener('touchstart', function() {
+  scrollPaused = true;
+  if (manualScrollTimer) clearTimeout(manualScrollTimer);
+});
+el.addEventListener('touchend', function() {
+  if (manualScrollTimer) clearTimeout(manualScrollTimer);
+  manualScrollTimer = setTimeout(function() { scrollPaused = false; }, 10000);
+});
 
 // ===== CLOCK =====
 function tick() {
