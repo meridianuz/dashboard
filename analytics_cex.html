@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Цех пресс-форм — Аналитика</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0a0c0f;--bg2:#111418;--bg3:#181c22;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#e8eaed;--muted:#6b7280;--muted2:#9ca3af;
+  --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--blue:#60a5fa;--purple:#a78bfa;--teal:#2dd4bf;--coral:#fb923c;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;min-height:100vh}
+.app{padding:14px;max-width:1920px;margin:0 auto}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 20px;margin-bottom:12px}
+.tb-l{display:flex;align-items:center;gap:14px}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px}
+.sep{width:1px;height:24px;background:var(--border2)}
+.sub{font-size:12px;color:var(--muted2);letter-spacing:.05em}
+.tb-r{display:flex;align-items:center;gap:12px}
+.btn{background:var(--bg3);border:1px solid var(--border2);color:var(--muted2);padding:7px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-family:'IBM Plex Sans',sans-serif;transition:all .15s;text-decoration:none;display:inline-block}
+.btn:hover{border-color:var(--blue);color:var(--blue)}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#000}
+.upd{font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
+
+.loadbar{display:none;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:12px;align-items:center;gap:14px}
+.loadbar.show{display:flex}
+.spinner{width:20px;height:20px;border:2px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.load-txt{font-size:13px;color:var(--text)}
+.load-prog{font-size:12px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-left:auto}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px 20px}
+.kpi-v{font-family:'Bebas Neue',sans-serif;font-size:38px;letter-spacing:1px;line-height:1}
+.kpi-l{font-size:12px;color:var(--muted2);margin-top:4px}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:6px;font-family:'IBM Plex Mono',monospace}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.grid3{display:grid;grid-template-columns:1.4fr 1fr;gap:12px;margin-bottom:12px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px}
+.card-title{font-size:12px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px}
+.chart-wrap{position:relative;height:280px}
+.chart-wrap.tall{height:360px}
+
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;border-bottom:1px solid var(--border)}
+td{padding:9px 10px;font-size:13px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.rank{font-family:'Bebas Neue',sans-serif;font-size:18px;width:30px;color:var(--muted)}
+.rank.top{color:var(--amber)}
+.bar-cell{position:relative}
+.bar-bg{position:absolute;left:0;top:50%;transform:translateY(-50%);height:24px;border-radius:4px;opacity:0.15}
+.bar-val{position:relative;font-family:'IBM Plex Mono',monospace;font-weight:500;padding-left:8px}
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500}
+
+.heatmap{display:grid;gap:3px}
+.hm-cell{aspect-ratio:1;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;font-family:'IBM Plex Mono',monospace;color:#fff}
+.hm-label{font-size:10px;color:var(--muted2);text-align:center;padding:2px}
+
+.nodata{text-align:center;padding:60px 20px;color:var(--muted)}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.cfgbox{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:26px;width:440px}
+.ct{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;margin-bottom:18px}
+.cl{font-size:11px;color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;margin-top:12px}
+.ci{width:100%;padding:9px 11px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:13px;font-family:'IBM Plex Mono',monospace;outline:none}
+.ci:focus{border-color:var(--blue)}
+.cacts{display:flex;gap:8px;margin-top:16px}
+.ca{flex:1;padding:9px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;border:1px solid var(--border2);background:var(--bg3);color:var(--text)}
+.ca.p{background:var(--blue);border-color:var(--blue);color:#000}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="tb-l">
+      <div class="logo">АНАЛИТИКА ЦЕХА</div>
+      <div class="sep"></div>
+      <div class="sub">ГДЕ ЗАСТРЕВАЮТ ЗАКАЗЫ · СКОЛЬКО ВРЕМЕНИ НА СТАДИЯХ</div>
+    </div>
+    <div class="tb-r">
+      <span class="upd" id="upd">Не загружено</span>
+      <a href="dashboard_cex.html" class="btn">← К дашборду</a>
+      <button class="btn primary" id="loadBtn">⟳ Загрузить аналитику</button>
+      <button class="btn" id="cfgBtn">⚙</button>
+    </div>
+  </div>
+
+  <div class="loadbar" id="loadbar">
+    <div class="spinner"></div>
+    <div class="load-txt" id="loadtxt">Загружаю историю задач из Битрикса...</div>
+    <div class="load-prog" id="loadprog">0 / 0</div>
+  </div>
+
+  <div id="content">
+    <div class="nodata">
+      <div style="font-size:40px;margin-bottom:12px">📊</div>
+      <div style="font-size:15px;margin-bottom:8px">Нажмите «Загрузить аналитику»</div>
+      <div style="font-size:12px;color:var(--muted)">Дашборд загрузит историю всех задач и посчитает где застревают заказы.<br>Это может занять 1-2 минуты при большом количестве задач.</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="overlay" id="ov">
+  <div class="cfgbox">
+    <div class="ct">Подключение к Битрикс24</div>
+    <div class="cl">URL портала</div>
+    <input class="ci" id="bx-url" placeholder="https://meri.bitrix24.kz"/>
+    <div class="cl">Токен вебхука</div>
+    <input class="ci" id="bx-tok" type="password" placeholder="xxxxxxxxxxxxxxxx"/>
+    <div class="cacts">
+      <button class="ca" onclick="document.getElementById('ov').classList.remove('open')">Отмена</button>
+      <button class="ca p" id="saveBtn">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var STAGE_MAP = {
+  '8':{label:'Новый заказ',group:'КБ',color:'#60a5fa'},
+  '10':{label:'Фаррух',group:'КБ',color:'#47d1e2'},
+  '12':{label:'Миразам',group:'КБ',color:'#75d900'},
+  '14':{label:'Лочинбек',group:'КБ',color:'#ffab00'},
+  '16':{label:'Жалолиддин',group:'КБ',color:'#ff5752'},
+  '18':{label:'Чизма Битди',group:'КБ',color:'#468ee5'},
+  '20':{label:'Ища рухсат',group:'Производство',color:'#60a5fa'},
+  '22':{label:'Загатовка',group:'Производство',color:'#47d1e2'},
+  '24':{label:'ЧПУ Фигура',group:'Производство',color:'#75d900'},
+  '166':{label:'TOKAR',group:'Производство',color:'#00c4fb'},
+  '26':{label:'Бахром Слесарка',group:'Производство',color:'#ffab00'},
+  '28':{label:'Акбар Слесарка',group:'Производство',color:'#ff5752'},
+  '30':{label:'Испытание',group:'Производство',color:'#468ee5'},
+  '32':{label:'Готовая форма',group:'Производство',color:'#1eae43'},
+  '34':{label:'Готовая форма',group:'Склад',color:'#1eae43'},
+  '36':{label:'Клиент не забрал',group:'Склад',color:'#f59e0b'},
+  '38':{label:'Клиент забрал',group:'Склад',color:'#22c55e'},
+};
+
+// Сопоставление названий стадий из истории (текстовые) к нашим
+var STAGE_BY_NAME = {
+  'Новый Заказ':'Новый заказ','Фаррух':'Фаррух','Миразам':'Миразам','Лочинбек':'Лочинбек',
+  'Жалолиддин':'Жалолиддин','Чизма Битди':'Чизма Битди',
+  'Ищга рухсат берилган':'Ища рухсат','Загатовка':'Загатовка','Чпу Фигура':'ЧПУ Фигура',
+  'TOKAR':'TOKAR','Бахром Слесарный работа':'Бахром Слесарка','Акбар Слесарный работа':'Акбар Слесарка',
+  'Испытание':'Испытание','Готовая форма':'Готовая форма',
+  'Клиент не забрал':'Клиент не забрал','Клиент забрал':'Клиент забрал',
+};
+
+var STAGE_COLOR_BY_NAME = {};
+Object.values(STAGE_MAP).forEach(function(s){ STAGE_COLOR_BY_NAME[s.label] = s.color; });
+
+var cfg = {url:'', tok:''};
+var charts = {};
+
+document.getElementById('cfgBtn').onclick = function(){ document.getElementById('ov').classList.add('open'); };
+document.getElementById('saveBtn').onclick = function(){
+  cfg.url = document.getElementById('bx-url').value.trim().replace(/\/+$/,'');
+  cfg.tok = document.getElementById('bx-tok').value.trim();
+  if(!cfg.url||!cfg.tok){ alert('Введите URL и токен'); return; }
+  try{ localStorage.setItem('bx_url',cfg.url); localStorage.setItem('bx_tok',cfg.tok); }catch(e){}
+  document.getElementById('ov').classList.remove('open');
+  loadAnalytics();
+};
+document.getElementById('loadBtn').onclick = function(){
+  if(!cfg.url||!cfg.tok){ document.getElementById('ov').classList.add('open'); return; }
+  loadAnalytics();
+};
+
+window.addEventListener('load', function(){
+  try{
+    var u=localStorage.getItem('bx_url'), t=localStorage.getItem('bx_tok');
+    if(u&&t){ cfg.url=u; cfg.tok=t; document.getElementById('bx-url').value=u; document.getElementById('bx-tok').value=t; }
+  }catch(e){}
+});
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function fetchGroup(base, gid){
+  var all=[], start=0;
+  while(true){
+    try{
+      var url=base+'tasks.task.list.json?filter[GROUP_ID]='+gid+'&select[]=ID&select[]=TITLE&select[]=STAGE_ID&select[]=CREATED_DATE&order[CREATED_DATE]=desc&limit=50&start='+start;
+      var r=await fetch(url); var d=await r.json();
+      var batch=[];
+      if(d.result&&d.result.tasks){ var t=d.result.tasks; batch=Array.isArray(t)?t:Object.values(t); }
+      else if(Array.isArray(d.result)) batch=d.result;
+      all=all.concat(batch);
+      if(batch.length<50) break;
+      start+=50; if(start>5000) break;
+    }catch(e){ break; }
+  }
+  return all;
+}
+
+async function fetchHistory(base, taskId){
+  try{
+    var r=await fetch(base+'tasks.task.history.list.json?taskId='+taskId);
+    var d=await r.json();
+    return (d.result&&d.result.list)||[];
+  }catch(e){ return []; }
+}
+
+async function loadAnalytics(){
+  var base = cfg.url+'/rest/1/'+cfg.tok+'/';
+  document.getElementById('loadbar').classList.add('show');
+  document.getElementById('loadtxt').textContent='Загружаю список задач...';
+
+  // 1. Все задачи
+  var results = await Promise.all([fetchGroup(base,'2'),fetchGroup(base,'4'),fetchGroup(base,'6')]);
+  var tasks = results[0].concat(results[1]).concat(results[2]);
+
+  // 2. История по каждой — считаем время на стадиях
+  var stageStats = {};   // stageName -> {totalDays, count, tasks:[]}
+  var userStats = {};    // userName -> {moves, stages:{}}
+  var taskDurations = []; // {name, client, totalDays, stages:[]}
+  var closedByMonth = {}; // 'YYYY-MM' -> count
+  var transitions = {};   // 'fromStage→toStage' -> count
+
+  var total = tasks.length, done = 0;
+
+  for (var i = 0; i < tasks.length; i++) {
+    var t = tasks[i];
+    var tid = t.id || t.ID;
+    var title = t.title || t.TITLE || '';
+    var mC = title.match(/Имя клиента:\s*(.*?)(?:\s+Имя детали:|$)/i);
+    var mD = title.match(/Дог№\s*(\S+)/i);
+    var client = mC ? mC[1].trim() : '';
+    var dogNum = mD ? mD[1].trim() : tid;
+
+    done++;
+    document.getElementById('loadtxt').textContent='Анализирую историю задач...';
+    document.getElementById('loadprog').textContent = done + ' / ' + total;
+
+    var hist = await fetchHistory(base, tid);
+    var stageEvents = hist.filter(function(h){ return h.field === 'STAGE'; });
+    var createdEvent = hist.find(function(h){ return h.field === 'NEW'; });
+
+    // Строим таймлайн стадий
+    var timeline = [];
+    if (createdEvent && stageEvents.length) {
+      timeline.push({ stage: stageEvents[0].value.from, date: createdEvent.createdDate });
+    }
+    stageEvents.forEach(function(ev){
+      timeline.push({ stage: ev.value.to, date: ev.createdDate });
+    });
+
+    var taskStages = [];
+    for (var j = 0; j < timeline.length; j++) {
+      var cur = timeline[j];
+      var next = timeline[j+1];
+      var stageName = STAGE_BY_NAME[cur.stage] || cur.stage;
+      var fromD = new Date(cur.date);
+      var toD = next ? new Date(next.date) : new Date();
+      var days = Math.max(0, (toD - fromD) / 86400000);
+
+      if (!stageStats[stageName]) stageStats[stageName] = { totalDays:0, count:0 };
+      stageStats[stageName].totalDays += days;
+      stageStats[stageName].count++;
+
+      taskStages.push({ stage: stageName, days: days });
+
+      // Переходы
+      if (next) {
+        var toName = STAGE_BY_NAME[next.stage] || next.stage;
+        var key = stageName + '→' + toName;
+        transitions[key] = (transitions[key]||0) + 1;
+      }
+    }
+
+    // Кто двигал
+    stageEvents.forEach(function(ev){
+      var uname = ev.user ? (ev.user.name + ' ' + (ev.user.lastName||'')).trim() : '—';
+      if (!userStats[uname]) userStats[uname] = { moves:0 };
+      userStats[uname].moves++;
+    });
+
+    var totalDays = taskStages.reduce(function(a,s){ return a + s.days; }, 0);
+    taskDurations.push({ name:'Дог №'+dogNum, client:client, totalDays:totalDays, stages:taskStages });
+
+    // Закрытые по месяцам (последняя стадия = Клиент забрал)
+    if (timeline.length) {
+      var last = timeline[timeline.length-1];
+      var lastName = STAGE_BY_NAME[last.stage] || last.stage;
+      if (lastName === 'Клиент забрал' || lastName === 'Готовая форма') {
+        var m = new Date(last.date).toISOString().slice(0,7);
+        closedByMonth[m] = (closedByMonth[m]||0) + 1;
+      }
+    }
+  }
+
+  document.getElementById('loadbar').classList.remove('show');
+  document.getElementById('upd').textContent = 'Загружено: ' + new Date().toLocaleString('ru');
+
+  renderAnalytics({ stageStats, userStats, taskDurations, closedByMonth, transitions, totalTasks: total });
+}
+
+function renderAnalytics(data){
+  var stageStats = data.stageStats;
+  var taskDurations = data.taskDurations;
+
+  // KPI
+  var allStageNames = Object.keys(stageStats);
+  var avgByStage = allStageNames.map(function(name){
+    var s = stageStats[name];
+    return { name:name, avg: s.count ? s.totalDays/s.count : 0, count:s.count };
+  });
+  // Узкое место — максимальное среднее время
+  var bottleneck = avgByStage.slice().sort(function(a,b){ return b.avg-a.avg; })[0] || {name:'—',avg:0};
+  var avgTotal = taskDurations.length ? taskDurations.reduce(function(a,t){return a+t.totalDays;},0)/taskDurations.length : 0;
+  var slowest = taskDurations.slice().sort(function(a,b){ return b.totalDays-a.totalDays; })[0] || {name:'—',totalDays:0};
+
+  var html = '';
+
+  // KPI ROW
+  html += '<div class="kpis">' +
+    '<div class="kpi"><div class="kpi-v" style="color:var(--blue)">'+data.totalTasks+'</div><div class="kpi-l">Всего задач проанализировано</div></div>' +
+    '<div class="kpi"><div class="kpi-v" style="color:var(--red)">'+esc(bottleneck.name)+'</div><div class="kpi-l">Главное узкое место</div><div class="kpi-sub">в среднем '+bottleneck.avg.toFixed(1)+' дн.</div></div>' +
+    '<div class="kpi"><div class="kpi-v" style="color:var(--amber)">'+avgTotal.toFixed(1)+'</div><div class="kpi-l">Средний цикл заказа (дней)</div></div>' +
+    '<div class="kpi"><div class="kpi-v" style="color:var(--purple)" title="'+esc(slowest.name)+'">'+slowest.totalDays.toFixed(0)+'</div><div class="kpi-l">Самый долгий заказ (дней)</div><div class="kpi-sub">'+esc(slowest.name)+'</div></div>' +
+  '</div>';
+
+  // CHARTS ROW 1 - avg time per stage + bottleneck
+  html += '<div class="grid3">' +
+    '<div class="card"><div class="card-title">📊 Среднее время на каждой стадии (дней)</div><div class="chart-wrap"><canvas id="chAvg"></canvas></div></div>' +
+    '<div class="card"><div class="card-title">🔥 Где застревают заказы</div><div class="chart-wrap"><canvas id="chBottle"></canvas></div></div>' +
+  '</div>';
+
+  // RATINGS ROW
+  html += '<div class="grid">' +
+    '<div class="card"><div class="card-title">🐌 Самые медленные заказы (топ-10)</div><div id="slowTable"></div></div>' +
+    '<div class="card"><div class="card-title">⚡ Самые быстрые заказы (топ-10)</div><div id="fastTable"></div></div>' +
+  '</div>';
+
+  // HEATMAP + closed
+  html += '<div class="grid">' +
+    '<div class="card"><div class="card-title">🗓 Тепловая карта загрузки стадий</div><div id="heatmap"></div></div>' +
+    '<div class="card"><div class="card-title">✅ Закрыто заказов по месяцам</div><div class="chart-wrap"><canvas id="chClosed"></canvas></div></div>' +
+  '</div>';
+
+  document.getElementById('content').innerHTML = html;
+
+  // Destroy old charts
+  Object.values(charts).forEach(function(c){ if(c) c.destroy(); });
+  charts = {};
+
+  var stageOrder = ['Новый заказ','Фаррух','Миразам','Лочинбек','Жалолиддин','Чизма Битди','Ища рухсат','Загатовка','ЧПУ Фигура','TOKAR','Бахром Слесарка','Акбар Слесарка','Испытание','Готовая форма','Клиент не забрал'];
+  var orderedStats = stageOrder.filter(function(n){ return stageStats[n]; }).map(function(n){
+    return { name:n, avg: stageStats[n].count?stageStats[n].totalDays/stageStats[n].count:0, count:stageStats[n].count, color: STAGE_COLOR_BY_NAME[n]||'#60a5fa' };
+  });
+
+  // Chart: avg per stage
+  charts.avg = new Chart(document.getElementById('chAvg'), {
+    type:'bar',
+    data:{
+      labels: orderedStats.map(function(s){return s.name;}),
+      datasets:[{ data: orderedStats.map(function(s){return +s.avg.toFixed(1);}), backgroundColor: orderedStats.map(function(s){return s.color;}), borderRadius:4 }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{ticks:{color:'#9ca3af',font:{size:10},maxRotation:60,minRotation:45},grid:{display:false}}, y:{ticks:{color:'#9ca3af'},grid:{color:'rgba(255,255,255,0.05)'}} } }
+  });
+
+  // Chart: bottleneck (sorted by avg desc, top 8)
+  var bottleData = orderedStats.slice().sort(function(a,b){return b.avg-a.avg;}).slice(0,8);
+  charts.bottle = new Chart(document.getElementById('chBottle'), {
+    type:'bar',
+    data:{
+      labels: bottleData.map(function(s){return s.name;}),
+      datasets:[{ data: bottleData.map(function(s){return +s.avg.toFixed(1);}), backgroundColor: bottleData.map(function(s){return s.color;}), borderRadius:4 }]
+    },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{ticks:{color:'#9ca3af'},grid:{color:'rgba(255,255,255,0.05)'}}, y:{ticks:{color:'#9ca3af',font:{size:11}},grid:{display:false}} } }
+  });
+
+  // Slow/fast tables
+  var sorted = taskDurations.slice().filter(function(t){return t.totalDays>0;}).sort(function(a,b){return b.totalDays-a.totalDays;});
+  var slow = sorted.slice(0,10);
+  var fast = sorted.slice().reverse().slice(0,10);
+  var maxSlow = slow.length?slow[0].totalDays:1;
+
+  function rankTable(arr, maxV, color){
+    var h='<table><thead><tr><th>#</th><th>Заказ</th><th>Клиент</th><th>Дней</th></tr></thead><tbody>';
+    arr.forEach(function(t,i){
+      var w = Math.round(t.totalDays/maxV*100);
+      h+='<tr><td class="rank'+(i<3?' top':'')+'">'+(i+1)+'</td>'+
+        '<td style="font-family:\'IBM Plex Mono\',monospace;font-size:12px">'+esc(t.name)+'</td>'+
+        '<td style="color:var(--muted2);font-size:12px">'+esc(t.client||'—')+'</td>'+
+        '<td class="bar-cell"><div class="bar-bg" style="width:'+w+'%;background:'+color+'"></div><span class="bar-val">'+t.totalDays.toFixed(1)+'</span></td></tr>';
+    });
+    return h+'</tbody></table>';
+  }
+  document.getElementById('slowTable').innerHTML = slow.length?rankTable(slow,maxSlow,'#ef4444'):'<div class="nodata">Нет данных</div>';
+  document.getElementById('fastTable').innerHTML = fast.length?rankTable(fast,maxSlow,'#22c55e'):'<div class="nodata">Нет данных</div>';
+
+  // Heatmap — стадии × кол-во задаче-дней (нагрузка)
+  var hmStats = orderedStats.map(function(s){ return { name:s.name, load: s.avg*s.count, count:s.count, color:s.color }; });
+  var maxLoad = Math.max.apply(null, hmStats.map(function(s){return s.load;}).concat([1]));
+  var hmHtml = '<div class="heatmap" style="grid-template-columns:repeat('+Math.min(hmStats.length,8)+',1fr)">';
+  hmStats.forEach(function(s){
+    var intensity = s.load/maxLoad;
+    var bg = 'rgba(239,68,68,'+(0.15+intensity*0.75)+')';
+    hmHtml += '<div><div class="hm-cell" style="background:'+bg+'" title="'+s.name+': '+s.count+' задач, нагрузка '+s.load.toFixed(0)+'">'+s.count+'</div><div class="hm-label">'+s.name+'</div></div>';
+  });
+  hmHtml += '</div>';
+  document.getElementById('heatmap').innerHTML = hmHtml;
+
+  // Closed by month
+  var months = Object.keys(data.closedByMonth).sort();
+  charts.closed = new Chart(document.getElementById('chClosed'), {
+    type:'line',
+    data:{
+      labels: months.map(function(m){ var p=m.split('-'); return p[2-1]+'.'+p[0].slice(2); }),
+      datasets:[{ data: months.map(function(m){return data.closedByMonth[m];}), borderColor:'#22c55e', backgroundColor:'rgba(34,197,94,0.1)', fill:true, tension:0.3, pointBackgroundColor:'#22c55e' }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{ticks:{color:'#9ca3af',font:{size:10}},grid:{display:false}}, y:{ticks:{color:'#9ca3af'},grid:{color:'rgba(255,255,255,0.05)'},beginAtZero:true} } }
+  });
+}
+</script>
+</body>
+</html>
