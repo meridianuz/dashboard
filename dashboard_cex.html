@@ -304,35 +304,37 @@ function fmtDate(ds, short) {
 }
 
 // ===== FETCH =====
-// Cache для фото задач
-var photoCache = {};
+// Cache для фото задач — храним ID вложения, а не URL (URL протухает)
+var photoCache = {};      // taskId -> URL (короткоживущий)
+var attachIdCache = {};   // taskId -> attachId (постоянный)
 
 async function fetchTaskPhoto(base, taskId) {
-  if (photoCache[taskId] !== undefined) return photoCache[taskId]; // use cache always
   try {
-    // Шаг 1: получаем ID вложений из задачи
-    var r1 = await fetch(base + 'tasks.task.get.json?taskId=' + taskId + '&select[]=UF_TASK_WEBDAV_FILES');
-    var d1 = await r1.json();
-    var files = (d1.result && d1.result.task && d1.result.task.ufTaskWebdavFiles) || [];
-    if (!files || !files.length) { photoCache[taskId] = null; return null; }
+    var attachId = attachIdCache[taskId];
 
-    // Шаг 2: по первому ID вложения получаем DOWNLOAD_URL
-    for (var i = 0; i < files.length; i++) {
-      var attachId = files[i];
-      var r2 = await fetch(base + 'disk.attachedObject.get.json?id=' + attachId);
-      var d2 = await r2.json();
-      if (d2.result && d2.result.DOWNLOAD_URL) {
-        var name = String(d2.result.NAME || '').toLowerCase();
-        if (name.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/)) {
-          photoCache[taskId] = d2.result.DOWNLOAD_URL;
-          return d2.result.DOWNLOAD_URL;
-        }
+    // Если ID вложения ещё не знаем — узнаём один раз
+    if (attachId === undefined) {
+      var r1 = await fetch(base + 'tasks.task.get.json?taskId=' + taskId + '&select[]=UF_TASK_WEBDAV_FILES');
+      var d1 = await r1.json();
+      var files = (d1.result && d1.result.task && d1.result.task.ufTaskWebdavFiles) || [];
+      attachId = (files && files.length) ? files[0] : null;
+      attachIdCache[taskId] = attachId;
+    }
+
+    if (!attachId) return null;
+
+    // Получаем свежий DOWNLOAD_URL по ID вложения
+    var r2 = await fetch(base + 'disk.attachedObject.get.json?id=' + attachId);
+    var d2 = await r2.json();
+    if (d2.result && d2.result.DOWNLOAD_URL) {
+      var name = String(d2.result.NAME || '').toLowerCase();
+      if (name.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/)) {
+        photoCache[taskId] = d2.result.DOWNLOAD_URL;
+        return d2.result.DOWNLOAD_URL;
       }
     }
-    photoCache[taskId] = null;
     return null;
   } catch(e) {
-    photoCache[taskId] = null;
     return null;
   }
 }
@@ -478,16 +480,9 @@ async function loadPhotos(base) {
   for (var i = 0; i < imgs.length; i++) {
     var el = imgs[i];
     var tid = el.getAttribute('data-task-id');
-    if (photoCache[tid] !== undefined) {
-      // already cached - just apply
-      if (photoCache[tid] && !el.src.includes('http')) {
-        el.src = photoCache[tid]; el.style.display='block';
-        var ph = el.parentNode && el.parentNode.querySelector('.no-thumb');
-        if (ph) ph.style.display='none';
-      }
-      continue;
-    }
     if (!tid) continue;
+    // Пропускаем только если точно знаем что фото нет
+    if (attachIdCache[tid] === null) continue;
     var url = await fetchTaskPhoto(base, tid);
     if (url) {
       el.src = url;
@@ -683,6 +678,8 @@ function render() {
 
 // ===== AUTOSCROLL =====
 var manualScrollTimer = null;
+var isAutoScrolling = false;
+var lastAutoScrollTop = 0;
 
 function startScroll() {
   if (scrollInterval) clearInterval(scrollInterval);
@@ -692,7 +689,12 @@ function startScroll() {
     if (scrollPaused) return;
     var el = document.getElementById('scrollWrap');
     if (!el) return;
+    // Двигаем программно и запоминаем позицию
+    isAutoScrolling = true;
     el.scrollTop += scrollDir;
+    lastAutoScrollTop = el.scrollTop;
+    setTimeout(function(){ isAutoScrolling = false; }, 5);
+
     var atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
     var atTop = el.scrollTop <= 0;
     if (atBottom) {
@@ -706,23 +708,35 @@ function startScroll() {
   }, 40);
 }
 
-// Пауза при ручной прокрутке — возобновляется через 10 секунд
-var el = document.getElementById('scrollWrap');
-el.addEventListener('mouseenter', function() { scrollPaused = true; });
-el.addEventListener('mouseleave', function() { scrollPaused = false; });
-el.addEventListener('scroll', function() {
+function pauseAutoScroll() {
   scrollPaused = true;
   if (manualScrollTimer) clearTimeout(manualScrollTimer);
-  manualScrollTimer = setTimeout(function() { scrollPaused = false; }, 10000);
+  manualScrollTimer = setTimeout(function() {
+    scrollPaused = false;
+  }, 8000);
+}
+
+var sw = document.getElementById('scrollWrap');
+// Мышь
+sw.addEventListener('mouseenter', function() { scrollPaused = true; });
+sw.addEventListener('mouseleave', function() {
+  if (manualScrollTimer) clearTimeout(manualScrollTimer);
+  manualScrollTimer = setTimeout(function() { scrollPaused = false; }, 2000);
 });
-el.addEventListener('touchstart', function() {
+// Колесо мыши — точно ручная прокрутка
+sw.addEventListener('wheel', function() { pauseAutoScroll(); }, { passive: true });
+// Тач на ТВ/телефоне
+sw.addEventListener('touchstart', function() {
   scrollPaused = true;
   if (manualScrollTimer) clearTimeout(manualScrollTimer);
-});
-el.addEventListener('touchend', function() {
+}, { passive: true });
+sw.addEventListener('touchmove', function() {
+  scrollPaused = true;
   if (manualScrollTimer) clearTimeout(manualScrollTimer);
-  manualScrollTimer = setTimeout(function() { scrollPaused = false; }, 10000);
-});
+}, { passive: true });
+sw.addEventListener('touchend', function() { pauseAutoScroll(); }, { passive: true });
+// Клавиши стрелок (пульт ТВ)
+sw.addEventListener('keydown', function() { pauseAutoScroll(); });
 
 // ===== CLOCK =====
 function tick() {
