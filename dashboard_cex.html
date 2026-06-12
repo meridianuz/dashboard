@@ -508,7 +508,7 @@ function openImg(src) {
 }
 
 async function openHistory(taskId, taskName) {
-  document.getElementById('histTitle').innerHTML = 'История · ' + taskName + ' <span class="hist-close" onclick="document.getElementById('histModal').classList.remove('open')">✕</span>';
+  document.getElementById('histTitle').innerHTML = 'История · ' + taskName + ' <span class="hist-close" onclick="document.getElementById(\'histModal\').classList.remove(\'open\')">✕</span>';
   document.getElementById('histBody').innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">Загрузка...</div>';
   document.getElementById('histModal').classList.add('open');
 
