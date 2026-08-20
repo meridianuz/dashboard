@@ -389,12 +389,16 @@ async function fetchAll() {
       else if (t.RESPONSIBLE_ID) resp = String(t.RESPONSIBLE_ID);
 
       var client = '', partName = '', dogNum = '';
-      var mC = title.match(/Имя клиента:\s*(.*?)(?:\s+Имя детали:|$)/i);
-      var mP = title.match(/Имя детали:\s*(.*?)(?:\s+Дог№|$)/i);
-      var mD = title.match(/Дог№\s*(\S+)/i);
-      if (mC) client   = mC[1].trim();
+      var mC = title.match(/Имя клиента:\s*(.*?)(?:\s*Имя детали:|\s*Дог№|\s*Договор№|$)/i);
+      var mP = title.match(/Имя детали:\s*(.*?)(?:\s*Дог№|\s*Договор№|$)/i);
+      var mD = title.match(/(?:Дог|Договор)№\s*(\S+)/i);
+      if (mC) { client = mC[1].trim(); client = client.replace(/Имя детали.*$/i,'').trim(); }
       if (mP) partName = mP[1].trim();
       if (mD) dogNum   = mD[1].trim();
+      // Формат без меток: "НАЗВАНИЕ Договор№XXX"
+      if (!client && !partName && dogNum) {
+        partName = title.split(/(?:Дог|Договор)№/i)[0].trim();
+      }
 
       return {
         id: id,
